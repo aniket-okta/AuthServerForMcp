@@ -18,7 +18,8 @@ def get_okta_token():
     Generates a client assertion JWT and exchanges it for an Okta access token.
     """
     token_url = f"https://{OKTA_DOMAIN}/oauth2/v1/token"
-
+    # Inside the get_okta_token function, before the try block:
+    print(f"Requesting token with scopes: {SCOPE}")
     # 1. Load your private key
     with open(PRIVATE_KEY_PATH, 'rb') as f:
         private_key = f.read()
@@ -71,23 +72,50 @@ def get_okta_token():
         raise
 
 
+def list_applications(access_token):
+    """Fetches a list of applications from the Okta org using an access token."""
+    print("\nAttempting to fetch applications...")
+
+    # The endpoint for listing applications in the Okta API
+    apps_url = f"https://{OKTA_DOMAIN}/api/v1/apps"
+
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {access_token}"  # Use the token here
+    }
+
+    try:
+        resp = httpx.get(apps_url, headers=headers, timeout=10.0)
+        resp.raise_for_status()  # Will raise an exception for 4xx/5xx responses
+        return resp.json()
+    except httpx.HTTPStatusError as exc:
+        print(f"Failed to fetch applications! Status: {exc.response.status_code}")
+        print(f"Response body: {exc.response.text}")
+        raise
+
+
 def main():
     try:
         token_data = get_okta_token()
         access_token = token_data.get("access_token")
-        expires_in = token_data.get("expires_in")
-        scope = token_data.get("scope")
-        print("✅ Successfully retrieved token!")
-        print(f"Access Token: {access_token}")  # Print first 20 chars for brevity
-        print(f"Expires in: {expires_in} seconds; Scopes: {scope}")
+
+        # --- Add this line for debugging ---
+        print("\n--- DECODING TOKEN ---")
+        print(access_token)
+        print("--- END TOKEN ---\n")
+
+        print("✅ Successfully retrieved access token!")
+
+        # Step 2: Use the token to get the list of apps
+        if access_token:
+            apps = list_applications(access_token)
+            print("\n✅ Successfully retrieved applications in your org:")
+            for app in apps:
+                print(f"- Label: {app.get('label', 'N/A')}, ID: {app.get('id', 'N/A')}")
+
     except Exception as e:
         print(f"\nAn error occurred: {e}")
 
 
 if __name__ == "__main__":
-    # Ensure your environment variables are set
-    # export OKTA_DOMAIN="your-okta-domain.okta.com"
-    # export OKTA_CLIENT_ID="your-client-id"
-    # export OKTA_SCOPES="your_scopes"
-    # export OKTA_KEY_ID="your-key-id-from-okta"
     main()
