@@ -17,7 +17,7 @@ def get_okta_token():
     """
     Generates a client assertion JWT and exchanges it for an Okta access token.
     """
-    token_url = f"https://{OKTA_DOMAIN}/oauth2/v1/token"
+    token_url = f"{OKTA_DOMAIN}/oauth2/v1/token"
     # Inside the get_okta_token function, before the try block:
     print(f"Requesting token with scopes: {SCOPE}")
     # 1. Load your private key
@@ -61,6 +61,8 @@ def get_okta_token():
     }
 
     try:
+        print(token_url, headers, data)
+        print("Sending token request...")
         resp = httpx.post(token_url, headers=headers, data=data, timeout=10.0)
         resp.raise_for_status()
         return resp.json()
@@ -71,6 +73,26 @@ def get_okta_token():
         print("Response body:", exc.response.text)
         raise
 
+def list_users(access_token):
+    """Fetches a list of users from the Okta org using an access token."""
+    print("\nAttempting to fetch users...")
+
+    # The endpoint for listing users in the Okta API
+    users_url = f"{OKTA_DOMAIN}/api/v1/users"
+
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {access_token}"  # Use the token here
+    }
+
+    try:
+        resp = httpx.get(users_url, headers=headers, timeout=10.0)
+        resp.raise_for_status()  # Will raise an exception for 4xx/5xx responses
+        return resp.json()
+    except httpx.HTTPStatusError as exc:
+        print(f"Failed to fetch users! Status: {exc.response.status_code}")
+        print(f"Response body: {exc.response.text}")
+        raise
 
 def list_applications(access_token):
     """Fetches a list of applications from the Okta org using an access token."""
@@ -99,19 +121,20 @@ def main():
         token_data = get_okta_token()
         access_token = token_data.get("access_token")
 
-        # --- Add this line for debugging ---
-        print("\n--- DECODING TOKEN ---")
-        print(access_token)
-        print("--- END TOKEN ---\n")
-
+        if not access_token:
+            print("❌ Failed to get access token.")
+            return
+            
         print("✅ Successfully retrieved access token!")
 
-        # Step 2: Use the token to get the list of apps
-        if access_token:
-            apps = list_applications(access_token)
-            print("\n✅ Successfully retrieved applications in your org:")
-            for app in apps:
-                print(f"- Label: {app.get('label', 'N/A')}, ID: {app.get('id', 'N/A')}")
+        # Step 2: Use the token to get the list of users
+        users = list_users(access_token)
+        # Corrected the print statement below
+        print("\n✅ Successfully retrieved users in your org:") 
+        for user in users:
+            # User objects have a 'profile' attribute
+            profile = user.get('profile', {})
+            print(f"- Login: {profile.get('login', 'N/A')}, Name: {profile.get('firstName', '')} {profile.get('lastName', '')}")
 
     except Exception as e:
         print(f"\nAn error occurred: {e}")
